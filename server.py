@@ -1,145 +1,147 @@
-# server.py
-# Requires installation: pip install Flask Flask-CORS gnews newspaper3k
-# Note: gnews uses newspaper3k for get_full_article. Ensure it's installed.
+# streamlit_news_viewer.py
+# Requires installation: pip install streamlit gnews newspaper3k
 
-import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from gnews import GNews # Import the GNews client
-import time # To add delays if needed
+import streamlit as st
+from gnews import GNews
+import time
 
 # --- Configuration ---
-# No API Key needed for GNews basic usage
-
 # Map frontend categories to GNews topics
-# GNews topics: WORLD, NATION, BUSINESS, TECHNOLOGY, ENTERTAINMENT, SPORTS, SCIENCE, HEALTH
 CATEGORY_TO_TOPIC_MAP = {
-    'business': 'BUSINESS',
-    'entertainment': 'ENTERTAINMENT',
-    'general': 'NATION', # Map general to Nation (or WORLD)
-    'health': 'HEALTH',
-    'science': 'SCIENCE',
-    'sports': 'SPORTS',
-    'technology': 'TECHNOLOGY',
-    # Add other mappings if needed, e.g., 'world': 'WORLD'
+    'Business': 'BUSINESS',
+    'Entertainment': 'ENTERTAINMENT',
+    'General': 'NATION',  # Or 'WORLD'
+    'Health': 'HEALTH',
+    'Science': 'SCIENCE',
+    'Sports': 'SPORTS',
+    'Technology': 'TECHNOLOGY',
 }
+NEWS_CATEGORIES_DISPLAY = list(CATEGORY_TO_TOPIC_MAP.keys())
 
-# --- Flask App Setup ---
-app = Flask(__name__)
-CORS(app) # Enable CORS for all origins
-
-# --- API Endpoint ---
-@app.route('/fetch-news', methods=['GET'])
-def fetch_news():
+# --- Helper Functions (from previous server, adapted for Streamlit) ---
+def fetch_news_from_gnews(category_display_name):
     """
-    Endpoint to fetch news using the GNews library and attempt to
-    download the full article text using get_full_article.
-    Example usage: http://localhost:5000/fetch-news?category=technology
+    Fetches news headlines using GNews and attempts to get full article text.
     """
-    category = request.args.get('category') # Get category from query param
-
-    # --- Input Validation ---
-    if not category:
-        return jsonify({"error": "Missing 'category' query parameter"}), 400
-
-    # Map the requested category to a GNews topic
-    topic = CATEGORY_TO_TOPIC_MAP.get(category.lower())
+    topic = CATEGORY_TO_TOPIC_MAP.get(category_display_name)
     if not topic:
-        print(f"Warning: Unknown category '{category}' requested. Falling back to 'NATION'.")
-        topic = 'NATION'
-        # Alternatively, return an error:
-        # return jsonify({"error": f"Unsupported category: {category}"}), 400
+        st.error(f"Invalid category mapped: {category_display_name}")
+        return []
 
-    # --- Fetch from Google News via GNews ---
-    print(f"Fetching news headlines for topic '{topic}' (mapped from category '{category}')...")
+    processed_articles = []
     try:
-        # Initialize GNews client
-        google_news = GNews(language='en', country='US', max_results=10) # Reduced results due to full article fetching time
+        with st.spinner(f"📰 Fetching headlines for '{category_display_name}'... This might take a moment for full text attempts."):
+            gnews_client = GNews(language='en', country='US', max_results=7) # Keep max_results low for performance
+            headlines = gnews_client.get_news_by_topic(topic)
 
-        # Fetch news headlines by the mapped topic
-        articles = google_news.get_news_by_topic(topic)
+            if not headlines:
+                st.info(f"🤔 No articles found by GNews for topic '{topic}'.")
+                return []
 
-        if not articles:
-             print(f"No articles found by GNews for topic '{topic}'.")
-             return jsonify([]) # Return empty list
+            st.write(f"Found {len(headlines)} headlines. Attempting to fetch full articles...")
 
-        print(f"Received {len(articles)} articles from GNews for topic '{topic}'. Attempting to fetch full text...")
+            for i, headline in enumerate(headlines):
+                article_url = headline.get('url')
+                article_title = headline.get('title')
 
-        # Process articles into the format expected by the frontend
-        processed_articles = []
-        for article_summary in articles:
-            # Basic check if essential headline data is present
-            article_url = article_summary.get('url')
-            article_title = article_summary.get('title')
-            if not article_title or not article_url:
-                print(f"Skipping article due to missing title or URL: {article_summary}")
-                continue
+                if not article_title or not article_url:
+                    print(f"Skipping article due to missing title or URL: {headline}")
+                    continue
 
-            print(f"  Attempting to fetch full article for: {article_url}")
-            full_article_text = None
-            scraped_successfully = False
-            start_time = time.time()
+                full_article_text = None
+                scraped_successfully = False
+                progress_bar = st.progress(0, text=f"Processing article {i+1}/{len(headlines)}: {article_title[:50]}...")
 
-            try:
-                # Attempt to download and parse the full article
-                # This can be slow and might fail for various reasons (paywalls, JS rendering, blocks)
-                article_object = google_news.get_full_article(article_url)
-
-                if article_object and article_object.text:
-                    # Check if the extracted text is substantial
-                    if len(article_object.text) > 150: # Arbitrary length check
-                         full_article_text = article_object.text
-                         scraped_successfully = True
-                         print(f"    Successfully fetched full text ({len(full_article_text)} chars).")
+                try:
+                    # This is the part that can be slow and unreliable
+                    article_object = gnews_client.get_full_article(article_url)
+                    if article_object and article_object.text:
+                        if len(article_object.text) > 150: # Basic check for substantial text
+                            full_article_text = article_object.text
+                            scraped_successfully = True
+                            print(f"Successfully fetched full text for: {article_url}")
+                        else:
+                            print(f"Fetched text too short for: {article_url}")
                     else:
-                         print(f"    Fetched text too short, likely failed extraction or summary page.")
-                else:
-                    print(f"    get_full_article failed or returned empty text.")
+                        print(f"get_full_article failed or returned empty for: {article_url}")
+                except Exception as e:
+                    print(f"Error fetching/parsing full article {article_url}: {e}")
 
-            except Exception as e:
-                # Catch errors during the download/parsing process
-                print(f"    Error fetching/parsing full article {article_url}: {e}")
-                # Keep full_article_text as None
+                processed_articles.append({
+                    "title": article_title,
+                    "description": headline.get('description', 'No description available.'),
+                    "url": article_url,
+                    "sourceName": headline.get('publisher', {}).get('title', 'Unknown Source'),
+                    "fullTextForDisplay": full_article_text if scraped_successfully else headline.get('description', 'Full text not available, showing description.'),
+                    "wasFullTextScraped": scraped_successfully
+                })
+                progress_bar.progress((i + 1) / len(headlines), text=f"Processed article {i+1}/{len(headlines)}")
+                time.sleep(0.1) # Small delay to allow UI to update and be polite
 
-            end_time = time.time()
-            print(f"    Fetching/parsing took {end_time - start_time:.2f} seconds.")
-
-            # Prepare source information
-            source_name = article_summary.get('publisher', {}).get('title', 'Unknown Source')
-
-            # Use description from the initial fetch as a fallback summary
-            description = article_summary.get('description', 'No description available.')
-
-            # Use the fetched full text if available, otherwise fallback to description
-            text_for_revision = full_article_text if scraped_successfully else description
-
-            processed_articles.append({
-                "title": article_title,
-                "description": description, # Keep the original description for summary display
-                "content": None, # NewsAPI specific field
-                "url": article_url,
-                "urlToImage": None, # GNews doesn't provide this directly
-                "source": {"name": source_name, "id": None},
-                # Use the potentially scraped full text for revision
-                "fullTextForRevision": text_for_revision,
-                # Flag indicating if full text was likely obtained
-                "scrapedTextAvailable": scraped_successfully
-            })
-            # Optional delay between articles to avoid overwhelming sites (might still get blocked)
-            # time.sleep(0.5)
-
-        print(f"Finished processing for topic '{topic}'. Returning {len(processed_articles)} articles.")
-        return jsonify(processed_articles)
+            progress_bar.empty() # Clear progress bar when done
+        st.success(f"✅ Finished processing {len(processed_articles)} articles for '{category_display_name}'.")
+        return processed_articles
 
     except Exception as e:
-        # Handle potential errors during GNews fetching or processing
+        st.error(f"🚨 An error occurred: {e}")
         print(f"Error during GNews processing for topic '{topic}': {e}")
-        error_message = "An error occurred while fetching or processing news via GNews."
-        return jsonify({"error": error_message}), 500
+        return []
 
-# --- Run the Server ---
-if __name__ == '__main__':
-    print("Starting Flask server on http://localhost:5000")
-    print("This version uses GNews and attempts get_full_article (experimental).")
-    # Ensure newspaper3k is installed: pip install newspaper3k
-    app.run(host='0.0.0.0', port=5000, debug=True)
+# --- Streamlit App UI ---
+st.set_page_config(layout="wide", page_title="Kids News Viewer", page_icon="📰")
+
+st.title("📰 Kids News Viewer (via GNews)")
+st.markdown("Select a category to fetch news. The app will attempt to retrieve the full article text, which can be slow and may not always succeed.")
+st.markdown("---")
+
+# --- Sidebar for Controls ---
+with st.sidebar:
+    st.header("⚙️ Controls")
+    selected_category = st.selectbox(
+        "🗂️ Choose a News Category:",
+        options=NEWS_CATEGORIES_DISPLAY,
+        index=0 # Default to the first category
+    )
+
+    if st.button("🚀 Fetch News", type="primary", use_container_width=True):
+        if selected_category:
+            # Store fetched articles in session state to persist them
+            st.session_state.articles = fetch_news_from_gnews(selected_category)
+            st.session_state.current_category = selected_category # Store category for display
+        else:
+            st.warning("Please select a category first.")
+
+    st.markdown("---")
+    if st.button("ℹ️ Show Host Info", use_container_width=True):
+        st.info("""
+        This Streamlit app is running locally on your computer.
+        You can typically access it via:
+        - **Host:** `localhost`
+        - **Port:** `8501` (default Streamlit port)
+        So, the URL is usually: `http://localhost:8501`
+        """)
+
+# --- Main Area for Displaying News ---
+st.header("🗞️ Fetched News Articles")
+
+if 'articles' in st.session_state and st.session_state.articles:
+    st.subheader(f"Showing articles for: {st.session_state.current_category}")
+    for i, article in enumerate(st.session_state.articles):
+        with st.expander(f"{i+1}. {article['title']}", expanded=(i==0)): # Expand the first article by default
+            st.markdown(f"**Source:** {article['sourceName']}")
+            st.markdown(f"**Original URL:** [Read more]({article['url']})", unsafe_allow_html=True)
+
+            if article['wasFullTextScraped']:
+                st.markdown("📝 **Attempted Full Article Text:**")
+                st.markdown(f"<div style='background-color:#f0f9ff; border-left: 4px solid #3b82f6; padding: 10px; border-radius: 4px; max-height: 400px; overflow-y: auto;'>{article['fullTextForDisplay'].replace_new_lines}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("📄 **Description (Full text unavailable):**")
+                st.markdown(f"<div style='background-color:#fffbeb; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 4px;'>{article['fullTextForDisplay']}</div>", unsafe_allow_html=True)
+            st.markdown("---")
+elif 'articles' in st.session_state and not st.session_state.articles: # Explicitly check for empty list after fetch attempt
+    st.info(f"No articles were found or processed for the selected category: {st.session_state.get('current_category', '')}")
+else:
+    st.info("Select a category and click 'Fetch News' to see articles here.")
+
+st.markdown("---")
+st.caption("Streamlit News Viewer App - Full article text retrieval is experimental.")
