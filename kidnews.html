@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids News Reviser ✨ (Selection Definition)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* Tailwind slate-100 for a softer background */
+        }
+        .loader, .audio-loader {
+            border: 4px solid #e2e8f0; /* Tailwind slate-200 */
+            border-top: 4px solid #4f46e5; /* Tailwind indigo-600 */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .audio-loader {
+             border-top-color: #10b981; /* Tailwind emerald-500 */
+             width: 18px;
+             height: 18px;
+             border-width: 3px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #messageBox {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+            z-index: 1000;
+            display: none;
+            font-weight: 500;
+            max-width: 90%;
+            text-align: center;
+        }
+        #messageBox.success {
+            background-color: #ecfdf5; /* Tailwind emerald-50 */
+            color: #065f46; /* Tailwind emerald-800 */
+            border: 1px solid #a7f3d0; /* Tailwind emerald-300 */
+        }
+        #messageBox.error {
+            background-color: #fef2f2; /* Tailwind red-50 */
+            color: #991b1b; /* Tailwind red-800 */
+            border: 1px solid #fecaca; /* Tailwind red-300 */
+        }
+        button {
+            padding: 0.625rem 1.25rem;
+            margin: 0.5rem;
+            cursor: pointer;
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.1s ease-in-out;
+            font-weight: 600; /* semibold */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        button:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0px);
+        }
+        .news-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            margin-right: 1.25rem; /* Increased margin */
+            flex-shrink: 0;
+            border: 1px solid #e2e8f0; /* slate-200 */
+        }
+        .news-content {
+            flex-grow: 1;
+        }
+
+        .revised-text-container {
+            background-color: #ffffff; /* white */
+            border: 1px solid #e2e8f0; /* slate-200 */
+            border-radius: 0.5rem;
+            padding: 1.25rem; /* p-5 for more space */
+            line-height: 1.7; /* Further increased line height */
+            color: #334155; /* slate-700 */
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .revised-text-container p:first-child { margin-top: 0; }
+        .revised-text-container p:last-child { margin-bottom: 0; }
+
+        #dictionaryPopover {
+            position: absolute;
+            background-color: #ffffff; /* white */
+            border: 1px solid #cbd5e1; /* slate-300 */
+            border-radius: 0.5rem;
+            padding: 0.875rem 1.125rem; /* p-3.5 px-4.5 */
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); /* shadow-2xl */
+            z-index: 1050;
+            max-width: 340px;
+            font-size: 0.9rem; /* Slightly larger */
+            line-height: 1.6;
+            display: none;
+            color: #1e293b; /* slate-800 */
+            transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        #dictionaryPopover.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #dictionaryPopover .loading-definition {
+            color: #64748b; /* slate-500 */
+            font-style: italic;
+            display: flex;
+            align-items: center;
+        }
+        #dictionaryPopover .loading-definition .loader { /* Style loader inside popover */
+            width: 16px; height: 16px; border-width: 2px; margin-right: 6px; margin-left:0;
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            .news-card-header { flex-direction: column; align-items: flex-start; }
+            .news-image { margin-right: 0; margin-bottom: 1rem; width: 100%; height: 180px; } /* Larger image on mobile */
+            #newsContainer > div { flex-direction: column; align-items: flex-start; }
+            #newsContainer .button-container { flex-direction: column; width: 100%; }
+            #newsContainer button { width: 100%; margin-top: 0.75rem; margin-left: 0; margin-right: 0; }
+            .api-key-container, #filterContainer { flex-direction: column; align-items: stretch; }
+            .api-key-container input, .api-key-container button, #filterContainer select { width: 100%; margin-bottom: 0.75rem; }
+            #apiKeysGrid { grid-template-columns: 1fr; }
+            #dictionaryPopover { max-width: 90vw; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 p-4 md:p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-2xl"> <h1 class="text-3xl md:text-4xl font-extrabold text-center text-indigo-600 mb-10">📰 Kids News Reviser 🧠</h1> <div id="messageBox"></div>
+        <div id="dictionaryPopover"></div>
+
+        <div id="filterContainer" class="mb-10 p-6 border border-slate-200 rounded-xl bg-slate-50 shadow-lg"> <label for="categoryFilter" class="block text-md font-semibold text-slate-700 mb-2">🗂️ Filter by Category:</label>
+             <select id="categoryFilter" name="categoryFilter" class="mt-1 block w-full pl-4 pr-10 py-3 text-base border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg shadow-sm">
+             </select>
+             <p class="text-xs text-slate-500 mt-3">Requires the local Python server (`server.py`) to be running.</p>
+             <p class="text-xs text-amber-600 mt-1">⚠️ Note: Full article fetching is experimental and may be slow or incomplete.</p>
+        </div>
+
+
+        <div id="apiKeysGrid" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            <div class="api-key-container p-6 border border-slate-200 rounded-xl bg-slate-50 shadow-lg flex flex-col">
+                <label for="geminiApiKey" class="block text-md font-semibold text-slate-700 flex-shrink-0 mb-2">🔑 Gemini API Key:</label>
+                <input type="password" id="geminiApiKey" name="geminiApiKey" placeholder="Enter Gemini API key" class="flex-grow block w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <p class="text-xs text-slate-500 mt-2">For revising news and definitions. <strong class="text-red-600">Warning:</strong> Keys in code are insecure.</p>
+            </div>
+
+            <div class="api-key-container p-6 border border-slate-200 rounded-xl bg-slate-50 shadow-lg flex flex-col">
+                <label for="elevenLabsApiKey" class="block text-md font-semibold text-slate-700 flex-shrink-0 mb-2">🔑 ElevenLabs API Key:</label>
+                <input type="password" id="elevenLabsApiKey" name="elevenLabsApiKey" placeholder="Enter ElevenLabs API key" class="flex-grow block w-full px-4 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" value="sk_c8ea1b9d4af1e1ca4418c9a714553a35fc684f2263ca8521">
+                <p class="text-xs text-slate-500 mt-2">For Text-to-Speech. <strong class="text-red-600">Warning:</strong> Keys in code are insecure.</p>
+            </div>
+        </div>
+
+
+        <div id="newsContainer" class="space-y-10"> <p class="text-slate-600 text-center py-4 text-lg">Select a category to fetch news via the local server... 🚀</p>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configuration & Constants ---
+        const LOCAL_SERVER_URL = 'http://localhost:5000/fetch-news';
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse`;
+        const ELEVENLABS_API_BASE_URL = `https://api.elevenlabs.io/v1/text-to-speech`;
+        const ELEVENLABS_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+        const NEWS_CATEGORIES = ['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology'];
+        const PLACEHOLDER_IMAGE = 'https://placehold.co/100x100/e2e8f0/94a3b8?text=News+Image'; // Updated placeholder
+
+        // --- DOM Elements ---
+        const newsContainer = document.getElementById('newsContainer');
+        const geminiApiKeyInput = document.getElementById('geminiApiKey');
+        const elevenLabsApiKeyInput = document.getElementById('elevenLabsApiKey');
+        const messageBox = document.getElementById('messageBox');
+        const categoryFilter = document.getElementById('categoryFilter');
+        const dictionaryPopover = document.getElementById('dictionaryPopover');
+
+        // --- Global Variables ---
+        let currentAudio = null;
+        let popoverTimeout = null;
+
+        // --- Functions ---
+
+        function showMessage(message, type = 'success') {
+            messageBox.textContent = message;
+            messageBox.className = type === 'success'
+                ? 'success fixed top-5 left-1/2 transform -translate-x-1/2 p-3 rounded-lg shadow-md z-50 bg-ecfdf5 text-065f46 border border-a7f3d0'
+                : 'error fixed top-5 left-1/2 transform -translate-x-1/2 p-3 rounded-lg shadow-md z-50 bg-fef2f2 text-991b1b border border-fecaca';
+            messageBox.style.display = 'block';
+            setTimeout(() => { messageBox.style.display = 'none'; }, 6000);
+        }
+
+        async function fetchNewsFromLocalServer(category) {
+            const url = `${LOCAL_SERVER_URL}?category=${category}`;
+            newsContainer.innerHTML = '<p class="text-slate-600 text-center py-4 text-lg">Fetching news & attempting full text retrieval... <span class="loader"></span></p>';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    let errorMsg = `Error fetching from local server (${response.status}): ${response.statusText}`;
+                    let errorData;
+                    try {
+                         errorData = await response.json();
+                         if (errorData && errorData.error) { errorMsg = `Local Server Error: ${errorData.error}`; }
+                    } catch (e) { /* Ignore */ }
+                    if (response.type === 'error') {
+                         errorMsg = "Could not connect to the local server. Is server.py running and CORS enabled?";
+                    }
+                    throw new Error(errorMsg);
+                }
+                const articlesFromServer = await response.json();
+                if (!Array.isArray(articlesFromServer)) {
+                     console.error("Received non-array data from server:", articlesFromServer);
+                     throw new Error("Received unexpected data format from local server.");
+                }
+                 if (articlesFromServer.length === 0) {
+                     showMessage(`No articles found for category "${category}".`, 'success');
+                     return [];
+                 }
+                return articlesFromServer.map((article, index) => ({
+                    id: `${category}-${index}-${Date.now()}`,
+                    title: article.title || 'No Title',
+                    summary: article.description || 'No description available.',
+                    textToRevise: article.fullTextForRevision || 'No content available for revision.',
+                    category: category,
+                    imageUrl: article.urlToImage,
+                    articleUrl: article.url,
+                    sourceName: article.source?.name || 'Unknown Source',
+                    wasFullTextScraped: article.scrapedTextAvailable || false
+                }));
+            } catch (error) {
+                console.error("Error fetching news from local server:", error);
+                const connectionErrorMsg = "Could not connect to the local server. Is server.py running and CORS enabled?";
+                const displayMsg = error.message.includes("Failed to fetch") || error.message.includes("NetworkError")
+                                  ? connectionErrorMsg
+                                  : `Failed to fetch news: ${error.message}`;
+                showMessage(displayMsg, 'error');
+                newsContainer.innerHTML = `<p class="text-red-700 text-center py-4 font-semibold">${displayMsg}. Check console.</p>`;
+                return null;
+            }
+        }
+
+        async function reviseNews(newsText, reviseButton, revisedContentDiv, speakButton) {
+            const geminiApiKey = geminiApiKeyInput.value.trim();
+            const originalButtonText = reviseButton.innerHTML;
+            if (!geminiApiKey) { showMessage('🔑 Gemini API key is missing.', 'error'); return; }
+
+            reviseButton.disabled = true;
+            reviseButton.innerHTML = 'Revising... <span class="loader"></span>';
+            revisedContentDiv.innerHTML = '<p class="text-slate-500 italic p-2">🧠 Generating revised text...</p>';
+            speakButton.style.display = 'none';
+
+            const prompt = `Please revise the following news text so it's easy for a child between 10 and 12 years old to understand. Keep the main facts, explain potentially complex terms simply, and maintain an engaging tone suitable for that age group. Do not add any extra formatting or markers like "---DIFFICULT_WORDS---". Just provide the revised text.\n\nOriginal text to revise:\n"${newsText}"`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const currentApiKey = geminiApiKey;
+            const apiUrlWithKey = `${GEMINI_API_URL}&key=${currentApiKey}`;
+
+            try {
+                const response = await fetch(apiUrlWithKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!response.ok) {
+                    let errorData;
+                    try { errorData = await response.json(); } catch (e) { /* Ignore */ }
+                    const errorMsg = errorData?.error?.message || `API request failed with status ${response.status}`;
+                    throw new Error(`Gemini API Error: ${errorMsg}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let revisedText = '';
+                let buffer = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6);
+                                const data = JSON.parse(jsonStr);
+                                if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                                    revisedText += data.candidates[0].content.parts[0].text;
+                                }
+                            } catch (e) { console.warn("Error parsing Gemini SSE chunk:", e, "Chunk:", line); }
+                        }
+                    }
+                }
+                 if (buffer.startsWith('data: ')) {
+                     try {
+                         const jsonStr = buffer.substring(6);
+                         const data = JSON.parse(jsonStr);
+                         if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                             revisedText += data.candidates[0].content.parts[0].text;
+                         }
+                     } catch (e) { console.warn("Error parsing final Gemini SSE chunk:", e, "Chunk:", buffer); }
+                 }
+
+                if (revisedText.trim()) {
+                    revisedContentDiv.innerHTML = `<p>${revisedText.replace(/\n/g, '<br><br>')}</p>`; // Add double line breaks for paragraphs
+                    revisedContentDiv.addEventListener('mouseup', handleTextSelection);
+                    speakButton.style.display = 'inline-block';
+                    speakButton.dataset.text = revisedText;
+                    showMessage('✅ News revised successfully! Select text to get definitions.', 'success');
+                } else {
+                    throw new Error("Received empty revised text from Gemini API.");
+                }
+
+            } catch (error) {
+                console.error("Error revising news:", error);
+                revisedContentDiv.innerHTML = `<p class="text-red-700 font-semibold">Error: Could not revise news. ${error.message}.</p>`;
+                showMessage(`❌ Revision Error: ${error.message}`, 'error');
+            } finally {
+                reviseButton.disabled = false;
+                reviseButton.innerHTML = '🔄 Revise News'; // Restore with emoji
+            }
+        }
+
+        function handleTextSelection(event) {
+            const selectedText = window.getSelection().toString().trim();
+            if (selectedText && selectedText.length > 2 && selectedText.length < 50) {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    fetchAndShowDefinition(selectedText, rect);
+                }
+            } else if (dictionaryPopover.style.display === 'block' && (!selectedText || selectedText.length <=2) ) {
+                hideDefinitionPopover();
+            }
+        }
+
+        async function fetchAndShowDefinition(text, positionRect) {
+            const geminiApiKey = geminiApiKeyInput.value.trim();
+            if (!geminiApiKey) {
+                showMessage('🔑 Gemini API key is missing to fetch definition.', 'error');
+                return;
+            }
+
+            dictionaryPopover.innerHTML = '<span class="loading-definition"><span class="loader"></span> Getting definition...</span>';
+            positionAndShowPopover(positionRect);
+
+            const prompt = `Provide a very simple definition for the following word or phrase, suitable for a 10-12 year old. Be concise. If it's a phrase, explain its meaning. If unsure, say "I'm not sure about that one.":\n\n"${text}"`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiUrlWithKey = `${GEMINI_API_URL}&key=${geminiApiKey}`;
+
+            try {
+                const response = await fetch(apiUrlWithKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to fetch definition from Gemini.');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let definitionText = '';
+                let buffer = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.substring(6);
+                                const data = JSON.parse(jsonStr);
+                                if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                                    definitionText += data.candidates[0].content.parts[0].text;
+                                }
+                            } catch (e) { /* Ignore parsing errors */ }
+                        }
+                    }
+                }
+                 if (buffer.startsWith('data: ')) {
+                     try {
+                         const jsonStr = buffer.substring(6);
+                         const data = JSON.parse(jsonStr);
+                         if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                             definitionText += data.candidates[0].content.parts[0].text;
+                         }
+                     } catch (e) { /* Ignore */ }
+                 }
+
+                if (definitionText.trim()) {
+                    dictionaryPopover.innerHTML = `<strong>${text}:</strong><br>${definitionText.replace(/\n/g, '<br>')}`;
+                } else {
+                    dictionaryPopover.innerHTML = '😕 Could not get a definition.';
+                }
+            } catch (error) {
+                console.error("Error fetching definition:", error);
+                dictionaryPopover.innerHTML = '❌ Error getting definition.';
+            }
+            positionAndShowPopover(positionRect); // Reposition after content update
+        }
+
+        function positionAndShowPopover(selectionRect) {
+            if (!dictionaryPopover || !selectionRect) return;
+            dictionaryPopover.classList.add('visible');
+            dictionaryPopover.style.display = 'block';
+            let top = window.scrollY + selectionRect.bottom + 10;
+            let left = window.scrollX + selectionRect.left;
+            const popoverRect = dictionaryPopover.getBoundingClientRect();
+            const bodyWidth = document.body.clientWidth;
+            if (left + popoverRect.width > bodyWidth - 15) {
+                left = bodyWidth - popoverRect.width - 15;
+            }
+            if (left < 15) left = 15;
+            if (top + popoverRect.height > window.innerHeight + window.scrollY - 15) {
+                top = window.scrollY + selectionRect.top - popoverRect.height - 10;
+            }
+            if (top < window.scrollY + 15) top = window.scrollY + 15;
+            dictionaryPopover.style.left = `${left}px`;
+            dictionaryPopover.style.top = `${top}px`;
+            clearTimeout(popoverTimeout);
+            popoverTimeout = setTimeout(() => {
+                if (!dictionaryPopover.matches(':hover')) {
+                    hideDefinitionPopover();
+                }
+            }, 4000);
+        }
+
+        function hideDefinitionPopover() {
+            if (dictionaryPopover) {
+                dictionaryPopover.classList.remove('visible');
+                setTimeout(() => {
+                    if (!dictionaryPopover.classList.contains('visible')) {
+                         dictionaryPopover.style.display = 'none';
+                    }
+                }, 150);
+            }
+            clearTimeout(popoverTimeout);
+        }
+
+        document.addEventListener('click', function(event) {
+            if (dictionaryPopover && dictionaryPopover.style.display === 'block') {
+                const isClickInsidePopover = dictionaryPopover.contains(event.target);
+                let clickInRevisedArea = false;
+                const revisedContentAreas = document.querySelectorAll('[id^="revised-content-"]');
+                revisedContentAreas.forEach(area => {
+                    if (area.contains(event.target)) {
+                        clickInRevisedArea = true;
+                    }
+                });
+                if (!isClickInsidePopover && !clickInRevisedArea) {
+                     hideDefinitionPopover();
+                }
+            }
+        });
+
+        if (dictionaryPopover) {
+            dictionaryPopover.addEventListener('mouseenter', () => clearTimeout(popoverTimeout));
+            dictionaryPopover.addEventListener('mouseleave', () => popoverTimeout = setTimeout(hideDefinitionPopover, 1500));
+        }
+
+
+        async function speakWithElevenLabs(speakButton) {
+             const textToSpeak = speakButton.dataset.text;
+             const elevenLabsApiKey = elevenLabsApiKeyInput.value.trim();
+             const originalButtonText = speakButton.textContent;
+             if (!textToSpeak) { showMessage('No text available to speak.', 'error'); return; }
+             if (!elevenLabsApiKey) { showMessage('🔑 ElevenLabs API key is missing.', 'error'); return; }
+             if (currentAudio) {
+                 currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null;
+                  document.querySelectorAll('.speak-button').forEach(btn => {
+                     if(btn !== speakButton && btn.dataset.originalText) {
+                          btn.innerHTML = btn.dataset.originalText; btn.disabled = false;
+                     }
+                  });
+             }
+             speakButton.disabled = true;
+             speakButton.innerHTML = 'Generating... <span class="audio-loader"></span>';
+             speakButton.dataset.originalText = originalButtonText;
+             const apiUrl = `${ELEVENLABS_API_BASE_URL}/${ELEVENLABS_VOICE_ID}`;
+             const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
+             const body = JSON.stringify({
+                 text: textToSpeak, model_id: 'eleven_monolingual_v1',
+                 voice_settings: { stability: 0.7, similarity_boost: 0.75 }
+             });
+             try {
+                 const response = await fetch(apiUrl, { method: 'POST', headers: headers, body: body });
+                 if (!response.ok) {
+                      let errorMsg = `ElevenLabs API Error: ${response.status}`;
+                      try {
+                          const errorData = await response.json();
+                          errorMsg += ` - ${errorData.detail?.message || JSON.stringify(errorData.detail) || 'Unknown error'}`;
+                      } catch (e) { errorMsg += ` - ${response.statusText}`; }
+                      if (response.status === 401) { errorMsg += " (Check API Key)"; }
+                     throw new Error(errorMsg);
+                 }
+                 const audioBlob = await response.blob();
+                 const audioUrl = URL.createObjectURL(audioBlob);
+                 currentAudio = new Audio(audioUrl);
+                 speakButton.innerHTML = 'Playing... 🔊';
+                 currentAudio.play();
+                 currentAudio.onended = () => {
+                     speakButton.disabled = false; speakButton.innerHTML = '🔊 Speak Revised News';
+                     currentAudio = null; URL.revokeObjectURL(audioUrl);
+                 };
+                 currentAudio.onerror = (e) => {
+                     console.error("Error playing audio:", e); showMessage('❌ Error playing audio.', 'error');
+                     speakButton.disabled = false; speakButton.innerHTML = '🔊 Speak Revised News';
+                     currentAudio = null; URL.revokeObjectURL(audioUrl);
+                 };
+             } catch (error) {
+                 console.error("Error calling ElevenLabs API or playing audio:", error);
+                 showMessage(`❌ ElevenLabs Error: ${error.message}`, 'error');
+                 speakButton.disabled = false; speakButton.innerHTML = '🔊 Speak Revised News';
+                 if (currentAudio && !currentAudio.src) { currentAudio = null; }
+             }
+        }
+
+        function populateCategoryFilter() {
+            if (!categoryFilter) return;
+            categoryFilter.innerHTML = '<option value="">-- Select Category --</option>';
+            NEWS_CATEGORIES.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+                categoryFilter.appendChild(option);
+            });
+            categoryFilter.addEventListener('change', async (event) => {
+                 const selectedCategory = event.target.value;
+                 if (selectedCategory) {
+                      const fetchedNews = await fetchNewsFromLocalServer(selectedCategory);
+                      renderNews(fetchedNews);
+                 } else {
+                      newsContainer.innerHTML = '<p class="text-slate-600 text-center py-4 text-lg">Select a category to fetch news via the local server... 🚀</p>';
+                 }
+            });
+        }
+
+        function renderNews(newsItems) {
+             if (newsItems !== null) { newsContainer.innerHTML = ''; }
+             if (newsItems === null) { return; }
+             if (!newsItems || newsItems.length === 0) {
+                  if (!document.querySelector('#newsContainer p.text-red-700')) {
+                       newsContainer.innerHTML = '<p class="text-slate-600 text-center py-4 text-lg">🤔 No news articles found for this category.</p>';
+                  }
+                 return;
+             }
+            if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+            newsItems.forEach(news => {
+                const newsDiv = document.createElement('div');
+                newsDiv.className = 'bg-white p-6 rounded-xl border border-slate-200 shadow-xl hover:shadow-2xl transition-shadow duration-300';
+                newsDiv.setAttribute('aria-labelledby', `news-title-${news.id}`);
+
+                const revisedContentId = `revised-content-${news.id}`;
+                const speakButtonId = `speak-button-${news.id}`;
+                const reviseButtonId = `revise-button-${news.id}`;
+
+                const textForRevisionInput = news.textToRevise || 'No content available for revision.';
+                const revisionSourceIndicator = news.wasFullTextScraped ? '(using attempted full text)' : '(using description)';
+
+                newsDiv.innerHTML = `
+                    <div class="flex flex-col sm:flex-row news-card-header mb-4">
+                         <img src="${news.imageUrl || PLACEHOLDER_IMAGE}" alt="News Image for ${news.title}" class="news-image" onerror="this.onerror=null;this.src='${PLACEHOLDER_IMAGE}';">
+                         <div class="news-content">
+                              <h2 id="news-title-${news.id}" class="text-xl lg:text-2xl font-bold text-slate-800 mb-1.5">${news.title}</h2>
+                              <p class="text-xs text-slate-500 mb-2">📰 Source: ${news.sourceName} | 🏷️ Category: <span class="font-medium">${news.category.charAt(0).toUpperCase() + news.category.slice(1)}</span></p>
+                              <p class="text-slate-700 text-sm leading-relaxed">${news.summary}</p>
+                              ${news.articleUrl ? `<a href="${news.articleUrl}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-700 hover:underline text-sm block mt-2 font-semibold">Read Original Article 🔗 &rarr;</a>` : ''}
+                         </div>
+                    </div>
+                    <div class="original-text hidden" data-text-for-revision="${encodeURIComponent(textForRevisionInput)}"></div>
+
+                    <div class="mt-6 mb-4 border-t border-slate-200 pt-6">
+                        <h3 class="text-xl font-semibold text-indigo-700 mb-3">🧒 Revised for Kids (10-12 yrs): <span class="text-sm font-medium text-slate-500">${revisionSourceIndicator}</span></h3>
+                        <div id="${revisedContentId}" class="revised-text-container min-h-[75px] select-text" tabindex="0">
+                            <p class="text-slate-500 italic">Click "Revise News" to generate a kid-friendly version.</p>
+                        </div>
+                    </div>
+
+                    <div class="button-container flex flex-wrap items-center gap-3 mt-6 border-t border-slate-200 pt-6">
+                        <button id="${reviseButtonId}" class="revise-button bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-5 rounded-lg shadow-md">
+                            🔄 Revise News
+                        </button>
+                        <button id="${speakButtonId}" class="speak-button bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 px-5 rounded-lg shadow-md" style="display: none;">
+                            🔊 Speak Revised News
+                        </button>
+                    </div>
+                `;
+                newsContainer.appendChild(newsDiv);
+
+                const reviseButton = document.getElementById(reviseButtonId);
+                const revisedContentDiv = document.getElementById(revisedContentId);
+                const speakButton = document.getElementById(speakButtonId);
+                const originalTextDiv = newsDiv.querySelector('.original-text');
+
+                const textToSendForRevision = originalTextDiv.dataset.textForRevision;
+                let decodedTextForRevision = "No text available for revision.";
+                try {
+                    if (textToSendForRevision) { decodedTextForRevision = decodeURIComponent(textToSendForRevision); }
+                } catch (e) { console.error("Error decoding revision text:", news.id, e); }
+
+                reviseButton.addEventListener('click', () => {
+                    if (!decodedTextForRevision || decodedTextForRevision === "No text available for revision.") {
+                        showMessage("Cannot revise: Text is missing or invalid.", "error"); return;
+                    }
+                    reviseNews(decodedTextForRevision, reviseButton, revisedContentDiv, speakButton);
+                });
+                speakButton.addEventListener('click', () => { speakWithElevenLabs(speakButton); });
+            });
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populateCategoryFilter();
+            newsContainer.innerHTML = '<p class="text-slate-600 text-center py-4 text-lg">Select a category to fetch news via the local server... 🚀</p>';
+            // Set default Gemini API key if input is empty (for convenience during testing)
+            if (!geminiApiKeyInput.value) {
+                 geminiApiKeyInput.value = "AIzaSyBpNS9buNt6TJOsWgr_zK0LtPW_Jx344-E"; // Your default key
+            }
+        });
+    </script>
+</body>
+</html>
